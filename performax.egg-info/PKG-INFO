@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: performax
-Version: 0.1.0
-Summary: Add your description here
-Requires-Python: >=3.12
-Description-Content-Type: text/markdown
-Requires-Dist: jax>=0.4.0
