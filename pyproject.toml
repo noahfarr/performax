@@ -1,7 +1,23 @@
 [project]
 name = "performax"
 version = "0.1.0"
-description = "Add your description here"
+description = "A lightweight profiling framework for JAX"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["jax>=0.4.0"]
+
+[project.optional-dependencies]
+development = ["pytest>=8.0.0", "pytest-cov>=4.0.0"]
+pandas = ["pandas>=2.0.0"]
+rich = ["rich>=13.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+]
