@@ -1,5 +1,3 @@
-"""Main profiler functionality."""
-
 import tempfile
 import threading
 from collections import defaultdict
@@ -18,24 +16,6 @@ _profile_lock = threading.Lock()
 
 
 def profile(fn: Callable[..., T], *args, **kwargs) -> tuple[T, ProfileResult]:
-    """Profile a function and return timing statistics for @track decorated functions.
-
-    This function executes the provided callable while capturing JAX profiler traces.
-    Any functions decorated with @track will have their timing information collected
-    and returned as a ProfileResult.
-
-    Args:
-        fn: The function to profile.
-        *args: Positional arguments to pass to fn.
-        **kwargs: Keyword arguments to pass to fn.
-
-    Returns:
-        A tuple of (result, ProfileResult) where result is the return value of fn
-        and ProfileResult contains timing statistics for tracked functions.
-
-    Raises:
-        ProfilingError: If profiling fails or if another profile is already running.
-    """
     acquired = _profile_lock.acquire(blocking=False)
     if not acquired:
         raise ProfilingError(
