@@ -2,7 +2,7 @@
 
 import jax.numpy as jnp
 
-from performax import PlainLogger, profile, track
+from performax import ConsoleLogger, profile, track
 
 
 @track
@@ -25,7 +25,7 @@ def main():
 
     result, stats = profile(forward, x, weights)
 
-    logger = PlainLogger()
+    logger = ConsoleLogger()
     print(logger.log(stats))
 
 
