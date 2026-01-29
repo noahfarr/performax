@@ -17,7 +17,7 @@ class TestProfileBasic:
         def simple_func():
             return 42
 
-        result, stats = profile(simple_func)
+        result, stats = profile(simple_func)()
         assert result == 42
         assert isinstance(stats, ProfileResult)
 
@@ -31,7 +31,7 @@ class TestProfileBasic:
         def main():
             return tracked_func()
 
-        result, stats = profile(main)
+        result, stats = profile(main)()
         assert result == "hello"
         assert isinstance(stats, ProfileResult)
 
@@ -41,7 +41,7 @@ class TestProfileBasic:
         def func_with_args(a, b):
             return a + b
 
-        result, _ = profile(func_with_args, 3, 4)
+        result, _ = profile(func_with_args)(3, 4)
         assert result == 7
 
     def test_profile_passes_kwargs(self):
@@ -50,7 +50,7 @@ class TestProfileBasic:
         def func_with_kwargs(a, b=10):
             return a * b
 
-        result, _ = profile(func_with_kwargs, 5, b=3)
+        result, _ = profile(func_with_kwargs)(5, b=3)
         assert result == 15
 
     def test_profile_with_no_tracked_functions(self):
@@ -59,7 +59,7 @@ class TestProfileBasic:
         def untracked():
             return 100
 
-        result, stats = profile(untracked)
+        result, stats = profile(untracked)()
         assert result == 100
         assert len(stats.stats) == 0
 
@@ -75,7 +75,7 @@ class TestProfileWithJax:
         def create_array():
             return jnp.ones((10, 10))
 
-        result, stats = profile(create_array)
+        result, stats = profile(create_array)()
         assert result.shape == (10, 10)
 
     def test_profile_with_jax_computation(self):
@@ -88,7 +88,7 @@ class TestProfileWithJax:
             b = jnp.ones((100, 100))
             return jnp.dot(a, b)
 
-        result, stats = profile(matmul)
+        result, stats = profile(matmul)()
         assert result.shape == (100, 100)
 
     def test_profile_captures_tracked_function_stats(self):
@@ -100,7 +100,7 @@ class TestProfileWithJax:
             a = jnp.ones((50, 50))
             return jnp.sum(a)
 
-        _, stats = profile(computation)
+        _, stats = profile(computation)()
 
         # The function should appear in the stats
         names = [s.name for s in stats.stats]
@@ -114,7 +114,7 @@ class TestProfileWithJax:
         def multi_return():
             return jnp.ones((5,)), jnp.zeros((5,))
 
-        result, stats = profile(multi_return)
+        result, stats = profile(multi_return)()
         assert len(result) == 2
         assert result[0].shape == (5,)
         assert result[1].shape == (5,)
@@ -132,7 +132,7 @@ class TestProfileWithJax:
             x = jnp.ones((10,))
             return inner(x)
 
-        result, stats = profile(outer)
+        result, stats = profile(outer)()
         assert result.shape == (10,)
 
         names = [s.name for s in stats.stats]
@@ -150,7 +150,7 @@ class TestProfileErrorHandling:
             raise ValueError("intentional error")
 
         with pytest.raises(ProfilingError, match="Profiling failed"):
-            profile(failing_func)
+            profile(failing_func)()
 
     def test_profile_preserves_original_exception(self):
         """Test that original exception is preserved as __cause__."""
@@ -159,7 +159,7 @@ class TestProfileErrorHandling:
             raise TypeError("type error")
 
         try:
-            profile(failing_func)
+            profile(failing_func)()
         except ProfilingError as e:
             assert isinstance(e.__cause__, TypeError)
             assert "type error" in str(e.__cause__)
@@ -184,7 +184,7 @@ class TestProfileThreadSafety:
                 return jnp.ones((10,))
 
             try:
-                profile(slow_func)
+                profile(slow_func)()
             except ProfilingError as e:
                 errors.append(e)
                 error_raised.set()
@@ -197,7 +197,7 @@ class TestProfileThreadSafety:
                 return 1
 
             try:
-                profile(simple_func)
+                profile(simple_func)()
             except ProfilingError as e:
                 errors.append(e)
                 error_raised.set()
@@ -223,13 +223,13 @@ class TestProfileThreadSafety:
 
         # First call should fail
         with pytest.raises(ProfilingError):
-            profile(failing_func)
+            profile(failing_func)()
 
         # Second call should work (lock was released)
         def working_func():
             return 42
 
-        result, _ = profile(working_func)
+        result, _ = profile(working_func)()
         assert result == 42
 
     def test_sequential_profiles_work(self):
@@ -244,9 +244,9 @@ class TestProfileThreadSafety:
         def func3():
             return 3
 
-        r1, _ = profile(func1)
-        r2, _ = profile(func2)
-        r3, _ = profile(func3)
+        r1, _ = profile(func1)()
+        r2, _ = profile(func2)()
+        r3, _ = profile(func3)()
 
         assert r1 == 1
         assert r2 == 2
@@ -275,7 +275,7 @@ class TestProfileIntegration:
             z = add(x, y)
             return multiply(z, z)
 
-        result, stats = profile(compute)
+        result, stats = profile(compute)()
 
         # Check result
         assert result.shape == (100, 100)
@@ -307,7 +307,7 @@ class TestProfileIntegration:
                 counted_func()
             return counted_func()
 
-        result, stats = profile(main)
+        result, stats = profile(main)()
 
         # Function was called 6 times
         assert call_count == 6
