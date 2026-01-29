@@ -4,12 +4,7 @@ import json
 
 import pytest
 
-from performax.logger import (
-    FileLogger,
-    Logger,
-    ConsoleLogger,
-    RichLogger,
-)
+from performax.logger import ConsoleLogger, FileLogger, Logger, RichLogger
 from performax.result import FunctionStats, ProfileResult
 
 
@@ -65,14 +60,14 @@ class TestConsoleLogger:
 
     def test_log_empty_result(self, empty_result):
         """Test logging empty results."""
-        logger = PlainLogger()
+        logger = ConsoleLogger()
         output = logger.log(empty_result)
 
         assert output == "No tracked functions were called."
 
     def test_log_table_alignment(self, sample_result):
         """Test that table columns are aligned."""
-        logger = PlainLogger()
+        logger = ConsoleLogger()
         output = logger.log(sample_result)
         lines = output.split("\n")
 
@@ -163,4 +158,3 @@ class TestFileLogger:
         output = logger.log(sample_result)
 
         assert "\n" not in output
-
