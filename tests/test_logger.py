@@ -5,12 +5,9 @@ import json
 import pytest
 
 from performax.logger import (
-    CSVLogger,
     FileLogger,
-    JsonLogger,
     Logger,
-    MarkdownLogger,
-    PlainLogger,
+    ConsoleLogger,
     RichLogger,
 )
 from performax.result import FunctionStats, ProfileResult
@@ -50,12 +47,12 @@ class TestLoggerBase:
             IncompleteLogger()
 
 
-class TestPlainLogger:
-    """Tests for PlainLogger."""
+class TestConsoleLogger:
+    """Tests for ConsoleLogger."""
 
     def test_log_with_stats(self, sample_result):
         """Test logging results with statistics."""
-        logger = PlainLogger()
+        logger = ConsoleLogger()
         output = logger.log(sample_result)
 
         assert "Function" in output
@@ -167,130 +164,3 @@ class TestFileLogger:
 
         assert "\n" not in output
 
-
-class TestJsonLogger:
-    """Tests for JsonLogger."""
-
-    def test_log_with_stats(self, sample_result):
-        """Test logging results as JSON."""
-        logger = JsonLogger()
-        output = logger.log(sample_result)
-        data = json.loads(output)
-
-        assert "functions" in data
-        assert len(data["functions"]) == 2
-        assert data["functions"][0]["name"] == "slow_func"
-        assert data["functions"][0]["total_ms"] == 500.0
-
-    def test_log_empty_result(self, empty_result):
-        """Test logging empty results as JSON."""
-        logger = JsonLogger()
-        output = logger.log(empty_result)
-        data = json.loads(output)
-
-        assert data["functions"] == []
-
-    def test_compact_output(self, sample_result):
-        """Test compact JSON output."""
-        logger = JsonLogger(indent=None)
-        output = logger.log(sample_result)
-
-        assert "\n" not in output
-
-    def test_with_metadata(self, sample_result):
-        """Test JSON output with metadata."""
-        logger = JsonLogger(include_metadata=True)
-        output = logger.log(sample_result)
-        data = json.loads(output)
-
-        assert "metadata" in data
-        assert "timestamp" in data["metadata"]
-        assert "function_count" in data["metadata"]
-        assert data["metadata"]["function_count"] == 2
-        assert "total_time_ms" in data["metadata"]
-
-
-class TestMarkdownLogger:
-    """Tests for MarkdownLogger."""
-
-    def test_log_with_stats(self, sample_result):
-        """Test logging results as Markdown table."""
-        logger = MarkdownLogger()
-        output = logger.log(sample_result)
-
-        assert "| Function | Total (ms) | Calls | Avg (ms) |" in output
-        assert "|----------|------------|-------|----------|" in output
-        assert "| slow_func |" in output
-        assert "| fast_func |" in output
-
-    def test_log_empty_result(self, empty_result):
-        """Test logging empty results as Markdown."""
-        logger = MarkdownLogger()
-        output = logger.log(empty_result)
-
-        assert output == "*No tracked functions were called.*"
-
-    def test_valid_markdown_table(self, sample_result):
-        """Test that output is valid Markdown table format."""
-        logger = MarkdownLogger()
-        output = logger.log(sample_result)
-        lines = output.split("\n")
-
-        # Header line
-        assert lines[0].startswith("|") and lines[0].endswith("|")
-        # Separator line
-        assert all(c in "|-" for c in lines[1].replace(" ", ""))
-        # Data lines
-        for line in lines[2:]:
-            assert line.startswith("|") and line.endswith("|")
-
-
-class TestCSVLogger:
-    """Tests for CSVLogger."""
-
-    def test_log_with_stats(self, sample_result):
-        """Test logging results as CSV."""
-        logger = CSVLogger()
-        output = logger.log(sample_result)
-        lines = output.split("\n")
-
-        assert lines[0] == "function,total_ms,calls,avg_ms"
-        assert "slow_func,500.000,10,50.000" in lines[1]
-
-    def test_log_empty_result(self, empty_result):
-        """Test logging empty results as CSV."""
-        logger = CSVLogger()
-        output = logger.log(empty_result)
-
-        assert output == "function,total_ms,calls,avg_ms"
-
-    def test_without_header(self, sample_result):
-        """Test CSV output without header."""
-        logger = CSVLogger(include_header=False)
-        output = logger.log(sample_result)
-
-        assert "function,total_ms" not in output
-        assert "slow_func" in output
-
-    def test_custom_delimiter(self, sample_result):
-        """Test CSV with custom delimiter."""
-        logger = CSVLogger(delimiter="\t")
-        output = logger.log(sample_result)
-
-        assert "\t" in output
-        assert "," not in output.replace("500.000", "")  # Exclude decimal
-
-    def test_parseable_csv(self, sample_result):
-        """Test that output is parseable as CSV."""
-        import csv
-        from io import StringIO
-
-        logger = CSVLogger()
-        output = logger.log(sample_result)
-
-        reader = csv.DictReader(StringIO(output))
-        rows = list(reader)
-
-        assert len(rows) == 2
-        assert rows[0]["function"] == "slow_func"
-        assert float(rows[0]["total_ms"]) == 500.0
