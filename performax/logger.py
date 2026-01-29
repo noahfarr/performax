@@ -11,7 +11,7 @@ class Logger(ABC):
         pass
 
 
-class PlainLogger(Logger):
+class ConsoleLogger(Logger):
     def log(self, result: "ProfileResult") -> str:
         if not result.stats:
             return "No tracked functions were called."
@@ -115,70 +115,3 @@ class FileLogger(Logger):
             for s in result.stats
         ]
         return f"{self.prefix} {self.separator.join(entries)}"
-
-
-class JsonLogger(Logger):
-    def __init__(self, *, indent: int | None = 2, include_metadata: bool = False):
-        self.indent = indent
-        self.include_metadata = include_metadata
-
-    def log(self, result: "ProfileResult") -> str:
-        import json
-        from datetime import datetime, timezone
-
-        data: dict = {"functions": result.to_dict()}
-
-        if self.include_metadata:
-            data["metadata"] = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "function_count": len(result.stats),
-                "total_time_ms": sum(s.total_duration_ms for s in result.stats),
-            }
-
-        return json.dumps(data, indent=self.indent)
-
-
-class MarkdownLogger(Logger):
-    def log(self, result: "ProfileResult") -> str:
-        if not result.stats:
-            return "*No tracked functions were called.*"
-
-        lines = [
-            "| Function | Total (ms) | Calls | Avg (ms) |",
-            "|----------|------------|-------|----------|",
-        ]
-
-        for s in result.stats:
-            lines.append(
-                f"| {s.name} | {s.total_duration_ms:.3f} | {s.call_count} | {s.avg_duration_ms:.3f} |"
-            )
-
-        return "\n".join(lines)
-
-
-class CSVLogger(Logger):
-    def __init__(self, *, include_header: bool = True, delimiter: str = ","):
-        self.include_header = include_header
-        self.delimiter = delimiter
-
-    def log(self, result: "ProfileResult") -> str:
-        lines = []
-
-        if self.include_header:
-            lines.append(
-                self.delimiter.join(["function", "total_ms", "calls", "avg_ms"])
-            )
-
-        for s in result.stats:
-            lines.append(
-                self.delimiter.join(
-                    [
-                        s.name,
-                        f"{s.total_duration_ms:.3f}",
-                        str(s.call_count),
-                        f"{s.avg_duration_ms:.3f}",
-                    ]
-                )
-            )
-
-        return "\n".join(lines)
