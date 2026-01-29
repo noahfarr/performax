@@ -6,7 +6,7 @@ from .logger import (
     JsonLogger,
     Logger,
     MarkdownLogger,
-    PlainLogger,
+    ConsoleLogger,
     RichLogger,
 )
 from .profiler import profile
@@ -19,7 +19,7 @@ __all__ = [
     "FunctionStats",
     "ProfilingError",
     "Logger",
-    "PlainLogger",
+    "ConsoleLogger",
     "RichLogger",
     "FileLogger",
     "JsonLogger",
