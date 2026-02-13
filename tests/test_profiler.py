@@ -253,6 +253,67 @@ class TestProfileThreadSafety:
         assert r3 == 3
 
 
+class TestProfileWarmup:
+    """Tests for the warmup parameter."""
+
+    def test_warmup_basic(self):
+        """Test that warmup=True works and returns correct result."""
+        jnp = pytest.importorskip("jax.numpy")
+
+        @track(name="warmup_func")
+        def compute():
+            return jnp.ones((10, 10))
+
+        result, stats = profile(compute, warmup=True)()
+        assert result.shape == (10, 10)
+        assert isinstance(stats, ProfileResult)
+
+    def test_warmup_passes_args_and_kwargs(self):
+        """Test that warmup call receives the same args and kwargs."""
+        jnp = pytest.importorskip("jax.numpy")
+
+        call_args = []
+
+        @track
+        def func(a, b, scale=1):
+            call_args.append((a, b, scale))
+            return jnp.ones((5,)) * a * b * scale
+
+        result, _ = profile(func, warmup=True)(2, 3, scale=4)
+        # Called twice: once for warmup, once for real
+        assert len(call_args) == 2
+        assert call_args[0] == (2, 3, 4)
+        assert call_args[1] == (2, 3, 4)
+
+    def test_warmup_result_correctness(self):
+        """Test that the returned result is from the traced run, not warmup."""
+
+        counter = 0
+
+        def counting_func():
+            nonlocal counter
+            counter += 1
+            return counter
+
+        result, _ = profile(counting_func, warmup=True)()
+        # warmup call returns 1, traced call returns 2
+        assert result == 2
+
+    def test_warmup_false_is_default(self):
+        """Test that warmup=False is the default and preserves existing behavior."""
+
+        call_count = 0
+
+        def func():
+            nonlocal call_count
+            call_count += 1
+            return 42
+
+        result, _ = profile(func)()
+        assert result == 42
+        assert call_count == 1  # Only one call, no warmup
+
+
 class TestProfileIntegration:
     """Integration tests for the full profiling workflow."""
 

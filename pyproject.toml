@@ -3,13 +3,14 @@ name = "performax"
 version = "0.1.0"
 description = "A lightweight profiling framework for JAX"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = ["jax>=0.4.0"]
 
 [project.optional-dependencies]
 development = ["pytest>=8.0.0", "pytest-cov>=4.0.0"]
 pandas = ["pandas>=2.0.0"]
 rich = ["rich>=13.0.0"]
+cuda = ["jax[cuda]>=0.4.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -23,7 +23,7 @@ def main():
     x = jnp.ones((1000, 512))
     weights = [jnp.ones((512, 512)) for _ in range(5)]
 
-    result, stats = profile(forward, x, weights)
+    result, stats = profile(forward)(x, weights)
 
     # Default format
     logger = FileLogger()

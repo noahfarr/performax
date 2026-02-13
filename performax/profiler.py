@@ -15,7 +15,9 @@ T = TypeVar("T")
 _profile_lock = threading.Lock()
 
 
-def profile(fn: Callable[..., T]) -> Callable[..., tuple[T, ProfileResult]]:
+def profile(
+    fn: Callable[..., T], *, warmup: bool = False
+) -> Callable[..., tuple[T, ProfileResult]]:
     def wrapper(*args, **kwargs) -> tuple[T, ProfileResult]:
         acquired = _profile_lock.acquire(blocking=False)
         if not acquired:
@@ -25,6 +27,16 @@ def profile(fn: Callable[..., T]) -> Callable[..., tuple[T, ProfileResult]]:
             )
 
         try:
+            if warmup:
+                warmup_result = fn(*args, **kwargs)
+                if hasattr(warmup_result, "block_until_ready"):
+                    warmup_result.block_until_ready()
+                elif isinstance(warmup_result, tuple):
+                    for item in warmup_result:
+                        if hasattr(item, "block_until_ready"):
+                            item.block_until_ready()
+                del warmup_result
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 trace_path = Path(tmpdir)
 
