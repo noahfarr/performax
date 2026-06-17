@@ -2,7 +2,13 @@
 
 import pytest
 
-from performax.decorators import PERFORMAX_PREFIX, track
+from performax.decorators import (
+    PERFORMAX_PREFIX,
+    disable_barriers,
+    enable_barriers,
+    scope,
+    track,
+)
 
 
 class TestTrackDecorator:
@@ -130,3 +136,79 @@ class TestTrackDecorator:
         """Test that PERFORMAX_PREFIX is defined correctly."""
         assert PERFORMAX_PREFIX == "performax/"
         assert PERFORMAX_PREFIX.endswith("/")
+
+
+class TestScopeDecorator:
+    """Tests for the @scope decorator (device-side, jax.named_scope based)."""
+
+    def test_scope_without_arguments(self):
+        @scope
+        def my_function():
+            return 42
+
+        assert my_function() == 42
+        assert my_function.__name__ == "my_function"
+
+    def test_scope_with_custom_name(self):
+        @scope(name="custom_name")
+        def my_function():
+            return 42
+
+        assert my_function() == 42
+        assert my_function.__name__ == "my_function"
+
+    def test_scope_preserves_return_value(self):
+        @scope
+        def add(a, b):
+            return a + b
+
+        assert add(2, 3) == 5
+
+    def test_scope_preserves_args_and_kwargs(self):
+        @scope
+        def func_with_args(a, b, c=10, d=20):
+            return a + b + c + d
+
+        assert func_with_args(1, 2) == 33
+        assert func_with_args(1, 2, c=100, d=200) == 303
+
+    def test_scope_preserves_docstring(self):
+        @scope
+        def documented_function():
+            """This is a docstring."""
+            pass
+
+        assert documented_function.__doc__ == """This is a docstring."""
+
+    def test_scope_with_exception(self):
+        @scope
+        def raising_function():
+            raise ValueError("test error")
+
+        with pytest.raises(ValueError, match="test error"):
+            raising_function()
+
+    def test_scope_with_class_method(self):
+        class MyClass:
+            @scope
+            def method(self, x):
+                return x * 2
+
+        assert MyClass().method(5) == 10
+
+    def test_scope_composes_with_barriers(self):
+        # optimization_barrier requires array/tracer inputs; with barriers
+        # enabled the wrapper applies it to a plain float result. Just ensure
+        # the value is preserved with barriers on, then restored off.
+        import jax.numpy as jnp
+
+        enable_barriers()
+        try:
+
+            @scope
+            def f(x):
+                return x + 1.0
+
+            assert float(f(jnp.float32(2.0))) == 3.0
+        finally:
+            disable_barriers()
