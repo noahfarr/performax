@@ -5,11 +5,9 @@ A lightweight profiling framework for JAX that makes it easy to measure executio
 ## Features
 
 - **Simple decorator API** - Just add `@track` to functions you want to profile
-- **Device-side profiling** - Measure steady-state GPU time per region *inside* a `jax.jit`-ed computation with `@scope`
+- **Host and device timelines** - One capture reports host dispatch time and device (GPU) kernel time per region
 - **Minimal overhead** - Uses JAX's built-in Perfetto tracing
-- **Detailed statistics** - Get total time, call counts, and averages
-- **Multiple output formats** - Pretty tables, dictionaries, pandas DataFrames, and more
-- **Flexible loggers** - Rich tables, JSON, CSV, Markdown, and plain text output
+- **Detailed statistics** - Total time, call counts, and averages, printed as a plain table
 - **Thread-safe** - Prevents concurrent profiling conflicts
 
 ## Installation
@@ -47,12 +45,15 @@ def main():
     weights = [jnp.ones((512, 512)) for _ in range(5)]
     return forward(x, weights)
 
-# profile(fn) returns a wrapped callable; call it to run and collect stats
 result, stats = profile(main)()
-print(stats)
+print(stats.host)
 ```
 
-Output:
+`profile(fn)` returns a wrapped callable; call it to run `fn` and collect a
+`Profile`. The `Profile` exposes two timelines from the same capture:
+`stats.host` (host-side dispatch time) and `stats.device` (device kernel time).
+Each is a `ProfileResult` that prints as a table:
+
 ```
 Function | Total (ms) | Calls | Avg (ms)
 -----------------------------------------
@@ -60,27 +61,33 @@ forward  | 125.432    | 1     | 125.432
 matmul   | 98.765     | 5     | 19.753
 ```
 
+`print(stats)` prints whichever timelines have data. For raw values use
+`stats.host.to_dict()` or `stats.host.to_dataframe()` (the latter needs `pandas`).
+
 ### Excluding JIT compilation time
 
-The first call to a function traces and compiles it via XLA, and that
-compilation cost lands in the profile. Pass `warmup=True` to run the function
-once before tracing, so the reported time reflects steady-state execution:
+The first call to a function traces and compiles it via XLA, and that cost lands
+in the profile. Pass `warmup=True` to run the function once before tracing, so
+the reported time reflects steady-state execution:
 
 ```python
 result, stats = profile(forward, warmup=True)(x, weights)
 ```
 
-## Device-side profiling (under `jax.jit`)
+## Host vs device time
 
-`track` measures host-side time with `jax.profiler.TraceAnnotation`, which only
-records while the Python wrapper body runs. That cannot measure a jitted
-computation: on warm dispatch JAX runs the cached executable without re-running
-the wrappers, so the annotations never fire.
+`@track` annotates a region two ways at once: a host-side `TraceAnnotation` and
+a compiled-in `jax.named_scope`. After one `profile` capture:
 
-To measure **steady-state device time per region under jit**, annotate regions
-with `@scope` (which tags HLO ops via `jax.named_scope`) and profile with
-`device_profile`, which reads the device timeline and attributes each GPU kernel
-to its enclosing scope.
+- `stats.host` is the host-side `TraceAnnotation` durations (dispatch / Python
+  time). Eager code populates this.
+- `stats.device` is device kernel time attributed to each region. A warm
+  `jax.jit`-ed computation populates this; its host annotations don't re-run on
+  replay, so `stats.host` is empty for it.
+
+### Profiling inside `jax.jit` (GPU)
+
+To get per-region device time for a jitted computation:
 
 ```python
 import performax as px
@@ -95,11 +102,11 @@ import jax.numpy as jnp
 # Recommended: stop XLA from fusing across region boundaries.
 px.enable_barriers()
 
-@px.scope(name="layer")
+@px.track(name="layer")
 def layer(x, w):
     return jax.nn.relu(jnp.dot(x, w))
 
-@px.scope(name="forward")
+@px.track(name="forward")
 def forward(x, weights):
     for w in weights:
         x = layer(x, w)
@@ -109,37 +116,19 @@ x = jnp.ones((512, 512))
 weights = [jnp.ones((512, 512)) for _ in range(5)]
 
 fn = jax.jit(forward)
-result, stats = px.device_profile(fn, warmup=True)(x, weights)
-print(stats)
+result, stats = px.profile(fn, warmup=True)(x, weights)
+print(stats.device)
 ```
 
 Notes:
 
 - **CUDA/GPU only** in this version.
-- `@scope` must execute *inside* the jitted function (decorate before jitting).
+- `@track` regions must execute *inside* the jitted function.
 - `enable_device_profiling()` reads `XLA_FLAGS` at backend init, so call it
   before the first JAX op. Equivalently, set
   `XLA_FLAGS=--xla_gpu_enable_command_buffer=` before launching.
-- `call_count` in the result is the number of device kernels attributed to the
-  scope, not the number of Python calls.
-
-See [`examples/device_profiling.py`](examples/device_profiling.py) for a runnable example.
-
-## Loggers
-
-`profile` and `device_profile` return a `ProfileResult` that prints as a plain
-table. For other formats, pass the result to a logger:
-
-```python
-from performax import ConsoleLogger, RichLogger, FileLogger
-
-print(ConsoleLogger().log(stats))   # ASCII table
-print(RichLogger().log(stats))      # colorful table (needs `rich`)
-print(FileLogger().log(stats))      # single-line, log-friendly
-```
-
-You can also get the raw data with `stats.to_dict()` or `stats.to_dataframe()`
-(needs `pandas`).
+- In `stats.device`, `call_count` is the number of device kernels attributed to
+  the region, not the number of Python calls.
 
 See the [`examples/`](examples/) directory for runnable scripts.
 
@@ -147,7 +136,6 @@ See the [`examples/`](examples/) directory for runnable scripts.
 
 - Python >= 3.11
 - JAX >= 0.4.0
-- rich (optional, for `RichLogger`)
 - pandas (optional, for `to_dataframe()`)
 
 ## Development

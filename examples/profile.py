@@ -1,22 +1,17 @@
-"""Example demonstrating the RichLogger for colorful table output.
-
-Requires the 'rich' package: pip install rich
-"""
+"""Basic host-side profiling: decorate with @track, profile, print the result."""
 
 import jax.numpy as jnp
 
-from performax import RichLogger, profile, track
+from performax import profile, track
 
 
 @track
 def matmul(a, b):
-    """Matrix multiplication."""
     return jnp.dot(a, b)
 
 
-@track(name="forward_pass")
+@track()
 def forward(x, weights):
-    """Forward pass through multiple layers."""
     for w in weights:
         x = matmul(x, w)
     return x
@@ -27,10 +22,7 @@ def main():
     weights = [jnp.ones((512, 512)) for _ in range(5)]
 
     result, stats = profile(forward)(x, weights)
-
-    # Default styling
-    logger = RichLogger()
-    print(logger.log(stats))
+    print(stats.host)
 
 
 if __name__ == "__main__":

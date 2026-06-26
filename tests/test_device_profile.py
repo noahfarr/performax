@@ -1,6 +1,6 @@
-"""Integration test for performax.device_profile (requires a CUDA GPU).
+"""Integration test for device-side profiling under jit (requires a CUDA GPU).
 
-device_profile needs CUDA command buffers disabled, which is controlled by an
+Device profiling needs CUDA command buffers disabled, which is controlled by an
 XLA flag read at backend initialization. To guarantee that ordering regardless
 of what other tests already initialized, the profiled run happens in a fresh
 subprocess with XLA_FLAGS set.
@@ -46,8 +46,8 @@ PROGRAM = textwrap.dedent(
 
     f = jax.jit(jax.vmap(M().train))
     x = jnp.ones((4, 64, 64), jnp.float32)
-    _, res = px.device_profile(f, warmup=True)(x)
-    names = {s.name: s.total_duration_ms for s in res.stats}
+    _, res = px.profile(f, warmup=True)(x)
+    names = {s.name: s.total_duration_ms for s in res.device.stats}
     assert "train" in names and names["train"] > 0.0, names
     assert "matmul" in names and names["matmul"] > 0.0, names
     print("DEVICE_PROFILE_OK", sorted(names))

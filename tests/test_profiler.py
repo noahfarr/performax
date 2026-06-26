@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from performax import ProfileResult, ProfilingError, profile, track
+from performax import Profile, ProfilingError, profile, track
 
 
 class TestProfileBasic:
@@ -19,7 +19,7 @@ class TestProfileBasic:
 
         result, stats = profile(simple_func)()
         assert result == 42
-        assert isinstance(stats, ProfileResult)
+        assert isinstance(stats, Profile)
 
     def test_profile_with_tracked_function(self):
         """Test profiling a tracked function."""
@@ -33,7 +33,7 @@ class TestProfileBasic:
 
         result, stats = profile(main)()
         assert result == "hello"
-        assert isinstance(stats, ProfileResult)
+        assert isinstance(stats, Profile)
 
     def test_profile_passes_args(self):
         """Test that profile passes positional arguments."""
@@ -61,7 +61,8 @@ class TestProfileBasic:
 
         result, stats = profile(untracked)()
         assert result == 100
-        assert len(stats.stats) == 0
+        assert len(stats.host.stats) == 0
+        assert len(stats.device.stats) == 0
 
 
 class TestProfileWithJax:
@@ -102,8 +103,7 @@ class TestProfileWithJax:
 
         _, stats = profile(computation)()
 
-        # The function should appear in the stats
-        names = [s.name for s in stats.stats]
+        names = [s.name for s in stats.host.stats]
         assert "test_computation" in names
 
     def test_profile_with_tuple_return(self):
@@ -135,7 +135,7 @@ class TestProfileWithJax:
         result, stats = profile(outer)()
         assert result.shape == (10,)
 
-        names = [s.name for s in stats.stats]
+        names = [s.name for s in stats.host.stats]
         assert "inner" in names
         assert "outer" in names
 
@@ -266,7 +266,7 @@ class TestProfileWarmup:
 
         result, stats = profile(compute, warmup=True)()
         assert result.shape == (10, 10)
-        assert isinstance(stats, ProfileResult)
+        assert isinstance(stats, Profile)
 
     def test_warmup_passes_args_and_kwargs(self):
         """Test that warmup call receives the same args and kwargs."""
@@ -341,11 +341,9 @@ class TestProfileIntegration:
         # Check result
         assert result.shape == (100, 100)
 
-        # Check stats
-        assert len(stats.stats) >= 1
+        assert len(stats.host.stats) >= 1
 
-        # Check output formats work
-        dict_output = stats.to_dict()
+        dict_output = stats.host.to_dict()
         assert isinstance(dict_output, list)
 
         str_output = str(stats)
@@ -373,7 +371,6 @@ class TestProfileIntegration:
         # Function was called 6 times
         assert call_count == 6
 
-        # Find the counted_func in stats
-        counted_stats = [s for s in stats.stats if s.name == "counted_func"]
+        counted_stats = [s for s in stats.host.stats if s.name == "counted_func"]
         if counted_stats:
             assert counted_stats[0].call_count == 6

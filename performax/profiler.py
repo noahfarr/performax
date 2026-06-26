@@ -1,14 +1,14 @@
 import tempfile
 import threading
-from collections import defaultdict
 from pathlib import Path
 from typing import Callable, TypeVar
 
 import jax
 
+from .device import parse_device_trace
 from .exceptions import ProfilingError
 from .parser import parse_perfetto_trace
-from .result import FunctionStats, ProfileResult
+from .result import Profile, ProfileResult
 
 T = TypeVar("T")
 
@@ -16,9 +16,9 @@ _profile_lock = threading.Lock()
 
 
 def profile(
-    fn: Callable[..., T], *, warmup: bool = False
-) -> Callable[..., tuple[T, ProfileResult]]:
-    def wrapper(*args, **kwargs) -> tuple[T, ProfileResult]:
+    fn: Callable[..., T], *, warmup: bool = False, inclusive: bool = True
+) -> Callable[..., tuple[T, Profile]]:
+    def wrapper(*args, **kwargs) -> tuple[T, Profile]:
         acquired = _profile_lock.acquire(blocking=False)
         if not acquired:
             raise ProfilingError(
@@ -29,12 +29,7 @@ def profile(
         try:
             if warmup:
                 warmup_result = fn(*args, **kwargs)
-                if hasattr(warmup_result, "block_until_ready"):
-                    warmup_result.block_until_ready()
-                elif isinstance(warmup_result, tuple):
-                    for item in warmup_result:
-                        if hasattr(item, "block_until_ready"):
-                            item.block_until_ready()
+                jax.block_until_ready(warmup_result)
                 del warmup_result
 
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -42,33 +37,14 @@ def profile(
 
                 with jax.profiler.trace(str(trace_path)):
                     result = fn(*args, **kwargs)
-                    if hasattr(result, "block_until_ready"):
-                        result.block_until_ready()
-                    elif isinstance(result, tuple):
-                        for item in result:
-                            if hasattr(item, "block_until_ready"):
-                                item.block_until_ready()
+                    jax.block_until_ready(result)
 
-                events = parse_perfetto_trace(trace_path)
-
-                stats_by_name: dict[str, dict] = defaultdict(
-                    lambda: {"total_us": 0.0, "count": 0}
+                host = ProfileResult.from_events(parse_perfetto_trace(trace_path))
+                device = ProfileResult.from_events(
+                    parse_device_trace(trace_path, inclusive=inclusive)
                 )
 
-                for event in events:
-                    stats_by_name[event.name]["total_us"] += event.duration_us
-                    stats_by_name[event.name]["count"] += 1
-
-                function_stats = [
-                    FunctionStats(
-                        name=name,
-                        total_duration_ms=data["total_us"] / 1000.0,
-                        call_count=data["count"],
-                    )
-                    for name, data in stats_by_name.items()
-                ]
-
-                return result, ProfileResult(function_stats)
+            return result, Profile(host=host, device=device)
 
         except ProfilingError:
             raise
